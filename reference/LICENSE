@@ -1,0 +1,10 @@
+Everything in reference/ is licensed under GPL-3.0.
+
+Reason: the C++ shims in this directory (mesen_step.cpp, mesen_candidate.cpp,
+and the NBA equivalents) include Mesen2 and NanoBoyAdvance headers and link
+against their objects. Both upstream projects are GPL-3.0, so this shim
+layer is GPL-3.0 as well.
+
+Full license text: ../LICENSE-GPL3
+Plain-English overview: ../LEGAL.md §2
+Repo-wide license map: ../LICENSE

@@ -1,0 +1,12 @@
+Source code, manifests, and metadata in corpus/ (testcases.json,
+grader.yaml, replays/, README.md) are licensed under MIT.
+
+ROM BINARIES under corpus/roms/ are NOT covered by this MIT grant.
+Each ROM is distributed under its own upstream license — typically MIT,
+BSD-3-Clause, GPLv2+, or Unlicense — and remains the copyright of its
+original author. No commercial game ROMs are included. See LEGAL.md §2
+for the full breakdown and upstream attributions.
+
+Full MIT text: ../LICENSE-MIT
+Plain-English overview: ../LEGAL.md §2
+Repo-wide license map: ../LICENSE

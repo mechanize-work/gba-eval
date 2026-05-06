@@ -1,0 +1,4 @@
+# Reference-frame cache: precomputed Mesen output per testcase. Binary,
+# typically 5–40 MB per file (zstd-compressed framebuffer + audio streams).
+# Kept in LFS so the working tree is cheap and `git log` doesn't choke.
+corpus/reference-cache/*.refcache filter=lfs diff=lfs merge=lfs -text

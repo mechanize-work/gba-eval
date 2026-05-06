@@ -1,0 +1,11 @@
+Everything in harness/ is licensed under MIT.
+
+Reason: harness/grader loads the Mesen reference WebAssembly module at
+runtime via wasmtime, in a separate address space and across a
+published ABI (spec/ABI.md). That arm's-length aggregation is not a
+combined work under GPL-3.0 §5, so the grader binary stays MIT even
+though the reference module it loads is GPL-3.0.
+
+Full license text: ../LICENSE-MIT
+Plain-English overview: ../LEGAL.md §5, §6.1
+Repo-wide license map: ../LICENSE

@@ -1,0 +1,13 @@
+[package]
+name = "gba-core-shim"
+version = "0.1.0"
+edition = "2021"
+
+# cdylib for wasm32-unknown-unknown: cargo produces a .wasm directly.
+# No emscripten — the wasm exports memory + all 10 ABI functions and
+# loads through wasmtime in the grader.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+gba-core = { path = ".." }

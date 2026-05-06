@@ -1,0 +1,52 @@
+MIT License
+
+Copyright (c) 2026 Mechanize, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+SCOPE OF THIS LICENSE
+
+The MIT terms above apply ONLY to the following parts of this repository:
+
+  - spec/              (emulator specification, BIOS stub generator)
+  - corpus/            (test case manifests, replays, grader config)
+    EXCEPT ROM binaries under corpus/roms/, which carry their own
+    upstream licenses — see LEGAL.md §2.
+  - candidates/        (our own candidate implementations, e.g. gba-core)
+  - harness/           (the grader and supporting Rust crates)
+  - quickstart/        (the docker-based reproducer)
+  - Top-level config: Cargo.toml, Cargo.lock, etc.
+  - LEGAL.md, README.md, and other repo-level docs
+
+THE MIT LICENSE DOES NOT APPLY TO:
+
+  - third_party/mesen/                GPL-3.0 (upstream Mesen2) — see its own LICENSE
+  - reference/build-mesen.sh,         GPL-3.0 (build glue + shim for Mesen2)
+    reference/mesen_step.cpp
+  - reference/mesen.wasm              GPL-3.0 (compiled from Mesen2)
+  - corpus/roms/                      Individual upstream licenses per ROM; no
+                                      commercial ROMs are included. See LEGAL.md §2.
+
+Copyright (c) 2026 Mechanize, Inc. on all MIT-licensed original work.
+
+See LICENSE-GPL3 for the GPL-3.0 license text, and LEGAL.md for a full
+plain-English explanation of how the pieces fit together, including
+BIOS provenance, ROM policy, and distribution obligations.

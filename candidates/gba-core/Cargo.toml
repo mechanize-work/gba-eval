@@ -1,0 +1,11 @@
+[package]
+name = "gba-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+bitflags = "2"
+
+[features]
+swi-trace = []

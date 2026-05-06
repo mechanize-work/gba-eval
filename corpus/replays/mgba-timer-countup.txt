@@ -1,0 +1,11 @@
+# mgba-suite: timer-countup (menu position 3)
+# Format: <frame> <keys_hex>
+0 0000
+10 0080
+13 0000
+25 0080
+28 0000
+40 0080
+43 0000
+55 0001
+58 0000

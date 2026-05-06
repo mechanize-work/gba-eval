@@ -1,0 +1,11 @@
+# armwrestler: thumb-alu (menu position 3, 1 page)
+# Format: <frame> <keys_hex>
+0 0000
+10 0080      # Down — cursor 0 → 1
+30 0000
+60 0080      # Down — cursor 1 → 2
+80 0000
+110 0080     # Down — cursor 2 → 3 (THUMB ALU)
+130 0000
+160 0008     # Start — enter THUMB ALU test
+180 0000

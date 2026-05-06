@@ -1,0 +1,9 @@
+# mgba-suite: timing (menu position 2)
+# Format: <frame> <keys_hex>
+0 0000
+10 0080
+13 0000
+25 0080
+28 0000
+40 0001
+43 0000

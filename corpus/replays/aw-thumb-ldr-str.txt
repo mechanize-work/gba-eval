@@ -1,0 +1,13 @@
+# armwrestler: thumb-ldr-str (menu position 4, 1 page)
+# Format: <frame> <keys_hex>
+0 0000
+10 0080      # Down — cursor 0 → 1
+30 0000
+60 0080      # Down — cursor 1 → 2
+80 0000
+110 0080     # Down — cursor 2 → 3
+130 0000
+160 0080     # Down — cursor 3 → 4 (THUMB LDR/STR)
+180 0000
+210 0008     # Start — enter THUMB LDR/STR test
+230 0000

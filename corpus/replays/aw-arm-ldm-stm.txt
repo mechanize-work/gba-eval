@@ -1,0 +1,12 @@
+# armwrestler: arm-ldm-stm (menu position 2, 1 page)
+# 20-frame Down holds with 30-frame gaps — the previous 3-frame
+# holds caused Down-press loss on some input pipelines, landing
+# candidates on the wrong menu item.
+# Format: <frame> <keys_hex>
+0 0000
+10 0080      # Down — cursor 0 → 1
+30 0000
+60 0080      # Down — cursor 1 → 2 (ARM LDM/STM)
+80 0000
+110 0008     # Start — enter ARM LDM/STM test
+130 0000

@@ -1,0 +1,52 @@
+# Heartwrench Advance demo replay
+# Press Start to begin, then move around
+# Key bits: A=0x001 B=0x002 Select=0x004 Start=0x008
+#           Right=0x010 Left=0x020 Up=0x040 Down=0x080
+
+# Wait for splash screen
+120 008   # Start
+122 000
+
+# Wait for title
+180 008   # Start
+182 000
+
+# Another start in case there's a third screen
+240 008
+242 000
+
+# Move right
+300 010   # Right
+360 000
+
+# Move right + A (interact/action)
+380 011   # Right + A
+400 010   # Right
+440 000
+
+# Move down
+460 080   # Down
+500 000
+
+# Move left
+520 020   # Left
+560 000
+
+# Jump / interact
+580 001   # A
+590 000
+
+# Move right more
+600 010   # Right
+660 011   # Right + A
+700 010   # Right
+740 000
+
+# Move up
+760 040   # Up
+800 000
+
+# Back right
+820 010   # Right
+880 011   # Right + A
+900 000

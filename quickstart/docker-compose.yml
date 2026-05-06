@@ -1,0 +1,66 @@
+# Reproducer — task environment + reference oracle sidecar.
+#
+# `task`     — the exact container the benchmark's agents saw: Rust
+#              toolchain, wasmtime, spec/, dev ROMs, oracle client. Idle
+#              shell; you `docker compose exec` into it to work.
+# `services` — reference emulator (Mesen wasm) over HTTP, reachable
+#              only from `task` on the internal compose network. Token
+#              left empty, so the oracle is open inside this network
+#              (fine for local reproduction).
+#
+# Usage:
+#   docker compose up -d              # builds images on first run
+#   ./shell.sh                        # drop into a shell as `agent`
+#   ./shell.sh cargo build ...        # or run one-shot commands
+#
+# Your work lives in the `task-work` named volume. First mount copies
+# the image's baked /task/ contents (spec, TASK.md, dev-roms, initial
+# git repo) into the volume; subsequent mounts preserve your changes.
+
+services:
+  task:
+    build:
+      context: ..
+      dockerfile: quickstart/task/Dockerfile
+    image: gba-eval-task:latest
+    container_name: gba-reproduce-task
+    networks: [gba]
+    restart: unless-stopped
+    user: "1000:1000"
+    working_dir: /task
+    # Compose auto-loads `.env` from this directory. Copy .env.example
+    # → .env and fill in whichever model keys your agent needs; unset
+    # vars are passed through as empty strings.
+    environment:
+      GBA_SERVICES_URL: "http://services:8001"
+      GBA_SERVICES_TOKEN: ""
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GOOGLE_API_KEY: "${GOOGLE_API_KEY:-}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+    volumes:
+      - task-work:/task
+    command: ["sleep", "infinity"]
+
+  services:
+    build:
+      context: ..
+      dockerfile: quickstart/services/Dockerfile
+    image: gba-eval-services:latest
+    container_name: gba-reproduce-services
+    networks: [gba]
+    restart: unless-stopped
+    # task starts first so the named volume is populated from the task
+    # image (spec/, dev-roms/, TASK.md, initial git repo). Then services
+    # attaches to the same /task — oracle-server.py writes session state
+    # to /task/.oracle-sessions, which the agent in `task` can also see.
+    depends_on: [task]
+    volumes:
+      - task-work:/task
+
+volumes:
+  task-work:
+
+networks:
+  gba:

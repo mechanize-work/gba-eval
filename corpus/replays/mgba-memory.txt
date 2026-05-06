@@ -1,0 +1,5 @@
+# mgba-suite: memory (menu position 0)
+# Format: <frame> <keys_hex>
+0 0000
+10 0001
+13 0000

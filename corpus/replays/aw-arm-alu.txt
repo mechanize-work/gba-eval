@@ -1,0 +1,12 @@
+# armwrestler: arm-alu (menu position 0, 2 page(s))
+# Cursor starts at position 0 (ARM ALU), no Down navigation needed.
+# Start presses held 20 frames with long gaps so both ref and
+# candidate can finish each page's tests before advancing.
+# Format: <frame> <keys_hex>
+0 0000
+10 0008      # Start — enter ARM ALU test
+30 0000
+# ARM ALU page 1 renders (ADD/ADC/... UMULL/SMULL)
+200 0008     # Start — advance page 1 → page 2 (UMLAL/SMLAL/SWP/...)
+220 0000
+# Page 2 is the last page and stays on screen for the remainder.

@@ -1,0 +1,19 @@
+Everything in spec/ is licensed under MIT, including:
+
+  - ABI.md (specification document)
+  - gen_bios_stub.py (clean-room BIOS stub generator)
+  - gba_bios_stub.bin, gba_bios_stub.h (generator output)
+
+The BIOS stub is a clean-room reimplementation of a small set of GBA SWI
+entry points, written from public SWI contracts (GBATEK and similar).
+It is NOT a dump or disassembly of Nintendo's GBA BIOS. See LEGAL.md §1
+for the full provenance statement.
+
+gbatek.htm is an external reference vendored for convenience; it is
+third-party documentation (copyright Martin Korth) and is not covered
+by this MIT grant. It is redistributed with attribution per the terms
+on the upstream document. See ../NOTICE.
+
+Full license text: ../LICENSE-MIT
+Plain-English overview: ../LEGAL.md §1
+Repo-wide license map: ../LICENSE

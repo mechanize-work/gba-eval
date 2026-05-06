@@ -1,0 +1,15 @@
+# armwrestler: arm-ldr-str (menu position 1, 2 page(s))
+# Down held 20 frames; one Start advances page 1 → page 2.
+# Page 2 is the last verdict page — DO NOT press Start again,
+# the next press advances out of LDR/STR into the LDM/STM
+# category, and a few more presses cycle back to the home menu.
+# Either would make endstate scoring trivially match any
+# candidate that boots the ROM.
+# Format: <frame> <keys_hex>
+0 0000
+10 0080      # Down — cursor 0 → 1 (ARM LDR/STR)
+30 0000
+80 0008      # Start — enter ARM LDR/STR test (page 1: LOAD TESTS PART 1)
+100 0000
+250 0008     # Start — page 1 → page 2 (LOAD TESTS PART 2, last verdict page; hold)
+270 0000

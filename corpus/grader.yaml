@@ -1,0 +1,35 @@
+# Grader configuration. Defaults to <corpus_dir>/grader.yaml.
+# All fields are optional — see GraderConfig in main.rs for defaults.
+
+# Escape hatch for candidates that need extra warmup on top of their
+# own boot_frames() value. Conformant candidates leave this at 0.
+candidate_boot_frames: 0
+
+fuel_per_frame: 500000000
+fuel_load_rom: 300000000000
+
+# ── Section weights ──────────────────────────────────────────────
+# Three sections, each [0,1], combined into overall score.
+# overall = Σ(section_weight * section_score)
+section_weights:
+  procedural: 0.20
+  replay: 0.60
+  audio: 0.20
+
+# ── Subsystem weights (within each section) ──────────────────────
+# ROMs are grouped by subsystem. Each subsystem gets a fixed weight.
+# Adding more ROMs to a subsystem improves measurement precision
+# without shifting other subsystems' weights.
+subsystem_weights:
+  procedural:
+    cpu: 0.35
+    memory: 0.15
+    comprehensive: 0.20
+    timer: 0.12
+    dma: 0.08
+    halt_irq: 0.10
+  replay:
+    gameplay: 1.00
+  audio:
+    psg: 0.50
+    game_audio: 0.50

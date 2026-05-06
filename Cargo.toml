@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "harness/lockstep",
+    "harness/grader",
+    "harness/oracle",
+    "harness/dump",
+    # The baseline candidate. Workspace member so `cargo build` checks it
+    # still compiles, but nothing in harness/ depends on it — the grader
+    # only sees its compiled wasm, same as any other submission.
+    "candidates/gba-core",
+    "candidates/gba-core/wasm-shim",
+]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1   # ARM interpreter is unusable at opt-level 0
+
+# wasmtime + cranelift in dev = unbearable. Always optimize the JIT.
+[profile.dev.package.wasmtime]
+opt-level = 3
+[profile.dev.package."cranelift-codegen"]
+opt-level = 3

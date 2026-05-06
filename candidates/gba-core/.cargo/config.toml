@@ -1,0 +1,9 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "link-arg=--initial-memory=67108864",
+    "-C", "link-arg=--max-memory=134217728",
+    # gba-core uses intentional wrapping arithmetic in CPU/timer code
+    # (Rust's default overflow checks become unreachable traps in wasm).
+    # The native build has opt-level=1 which disables them; match that.
+    "-C", "overflow-checks=no",
+]

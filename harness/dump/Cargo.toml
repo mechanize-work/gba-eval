@@ -1,0 +1,15 @@
+[package]
+name = "dump"
+version = "0.1.0"
+edition = "2021"
+
+# Dump WAV and/or MP4 from any ABI-conformant wasm + ROM + optional
+# replay. Useful for inspecting what an emulator (yours, gba-core, or
+# the bundled Mesen reference) actually produces on a given input.
+#
+# Usage:
+#   dump <wasm> <rom> <frames> [--replay <file>] [--wav <out.wav>] [--mp4 <out.mp4>]
+
+[dependencies]
+lockstep = { path = "../lockstep" }
+grader   = { path = "../grader" }

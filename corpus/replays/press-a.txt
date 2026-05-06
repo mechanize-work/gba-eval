@@ -1,0 +1,5 @@
+# Generic replay: press A at frame 5 to trigger audio
+# Format: <frame> <keys_hex>
+0 0000
+5 0001
+10 0000

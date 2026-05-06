@@ -1,0 +1,11 @@
+Everything in candidates/ is licensed under MIT, unless an individual
+candidate subdirectory ships its own LICENSE file overriding this.
+
+Candidates are independent implementations of the emulator ABI defined
+in spec/ABI.md. They do not link GPL code statically — they are compiled
+to standalone WebAssembly modules and communicate with the grader
+across a module boundary.
+
+Full license text: ../LICENSE-MIT
+Plain-English overview: ../LEGAL.md §6.1, §6.2
+Repo-wide license map: ../LICENSE

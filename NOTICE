@@ -1,0 +1,62 @@
+THIRD-PARTY NOTICES
+
+This product includes software developed by third parties, listed
+below with their licenses and the location of each component's source
+in this repository. The full text of every license referenced here is
+available in the files listed.
+
+For a plain-English summary and the directory-to-license map, see
+LEGAL.md and LICENSE at the root of this repository.
+
+================================================================
+Mesen2 (modified — headless GBA fork)        GPL-3.0-only
+================================================================
+Copyright Mesen2 contributors. Upstream Mesen2 is at
+https://github.com/NovaSquirrel/Mesen2 (author: Sour).
+
+  Corresponding Source (our fork, modified):
+      https://github.com/yang-29/Mesen2-gba-headless
+      Branch: main
+      Contains full upstream history plus our modifications on top.
+      Per-commit diffs are the GPL-3.0 §5(a) modification record.
+
+  Upstream (unmodified):
+      https://github.com/NovaSquirrel/Mesen2
+
+  Tracked here as a git submodule at: third_party/mesen/
+
+  Compiled artifact: reference/mesen.wasm
+      Used at runtime by the grader (loaded into wasmtime; arm's-length
+      aggregation, see LEGAL.md §6.1).
+
+Our modifications trim Mesen2 to single-threaded, GBA-only headless
+operation. The full list of changes and their dates is the git log
+of the Corresponding Source repository above.
+
+================================================================
+GBATEK                                       Redistribution with attribution
+================================================================
+Copyright Martin Korth. GBATEK is a reference document for the Game
+Boy Advance hardware, distributed publicly for over twenty years and
+redistributable with attribution per the terms on the upstream
+document.
+
+  Vendored:     spec/gbatek.htm
+
+================================================================
+Test ROMs and homebrew games                 Per-ROM upstream licenses
+================================================================
+ROMs committed under corpus/roms/ carry their upstream licenses.
+Per-ROM attribution and license notes are in corpus/README.md. No
+commercial game ROMs are distributed with this project.
+
+================================================================
+Original work (Mechanize, Inc.)              MIT
+================================================================
+Copyright (c) 2026 Mechanize, Inc.
+
+  Scope:        spec/ (except gbatek.htm), corpus/ (except ROM
+                binaries), candidates/, harness/, quickstart/,
+                top-level configuration, this NOTICE, LEGAL.md,
+                LICENSE, and README.md.
+  License text: LICENSE-MIT

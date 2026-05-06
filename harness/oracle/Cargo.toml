@@ -1,0 +1,23 @@
+[package]
+name = "oracle"
+version = "0.1.0"
+edition = "2021"
+
+# Black-box reference oracle for the task environment.
+#
+# Wraps Mesen behind the same 10-function ABI that candidates implement,
+# so the model can probe reference behavior on any ROM + input sequence
+# without seeing the source. Loads the bundled mesen.wasm via wasmtime
+# so `oracle run` output matches what the grader sees.
+#
+# Usage:
+#   oracle run <rom> <frames> [--replay <file>] [--dump-frames <dir>] [--dump-audio <file>]
+#   oracle info                # print ABI version, rate limit, dev ROM list
+
+[dependencies]
+# lockstep: Reference trait + InputReplay parser. The Mesen reference
+# is loaded as wasm through the grader's WasmCandidate — same binary
+# the grader uses.
+lockstep = { path = "../lockstep" }
+grader   = { path = "../grader" }
+serde_json = "1"

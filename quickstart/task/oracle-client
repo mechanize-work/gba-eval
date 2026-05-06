@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""Thin client: forwards argv + cwd to the services container's oracle
+endpoint, streams back stdout/stderr/returncode. The actual reference
+emulator binary is never present in this container.
+
+Two modes:
+
+  oracle <cmd...>         — one-shot CLI (help, info, run). Forwards to
+                            POST /oracle. Paths are staged through the
+                            shared /task/.oracle-out volume so files the
+                            agent writes (--replay) and files the server
+                            writes (--dump-frames, --dump-audio) work
+                            transparently despite the network boundary.
+
+  oracle session <sub>    — stateful session, ABI-shaped. Each subcommand
+                            hits a typed endpoint under /oracle/session.
+                            framebuffer / audio return raw binary to
+                            stdout for shell redirection.
+
+Path translation — the services container has its own filesystem; only
+`/task` is shared between the two.
+
+  Output paths (server writes → agent reads): --dump-frames, --dump-audio,
+    --dump, --output, -o. Rewrite the agent's path to a scratch dir under
+    /task/.oracle-out, let the server write there, then move files to the
+    agent's original path after the call.
+
+  Input paths (agent writes → server reads): --replay. Stage the
+    agent's file into /task/.oracle-out and rewrite args to point at
+    the staged copy so the server can read it. Before this translation
+    agents had to manually copy replay files into /task (non-obvious
+    and easy to forget), and oracle would silently fail with "No such
+    file or directory" for files the agent had just written to /tmp.
+
+    The rom positional is NOT translated: agents pass paths relative
+    to cwd (typically /task/dev-roms/*.gba), which resolve the same on
+    both sides. If someone passes an absolute path outside /task the
+    server will fail with a clear "file not found" — deliberately not
+    hidden behind auto-staging because that would mask bad argv.
+
+stdout/stderr is rewritten both ways so the agent always sees the paths
+it supplied, not the shared-volume staging paths.
+"""
+import json, os, shutil, socket, sys, urllib.request, urllib.error, uuid
+
+SERVICES_URL = os.environ.get("GBA_SERVICES_URL", "http://services:8001")
+SERVICES_TOKEN = os.environ.get("GBA_SERVICES_TOKEN", "")
+DUMP_FLAGS = {"--dump-frames", "--dump-audio", "--dump", "--output", "-o"}
+INPUT_FLAGS = {"--replay"}
+SHARE_ROOT = "/task/.oracle-out"
+
+
+def _mkshared(path):
+    """mkdir a shared-volume path with setgid + group-writable so the
+    services container (uid 5000, group gba) can write into dirs the
+    agent (uid 1000, group gba) created."""
+    os.makedirs(path, exist_ok=True)
+    try: os.chmod(path, 0o2775)
+    except OSError: pass
+
+
+def _rewrite_dump_paths(args):
+    new_args, moves = [], []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in DUMP_FLAGS and i + 1 < len(args):
+            val = args[i + 1]
+            if val.startswith("/") and val != "/task" and not val.startswith("/task/"):
+                _mkshared(SHARE_ROOT)
+                tmp_parent = os.path.join(SHARE_ROOT, uuid.uuid4().hex)
+                _mkshared(tmp_parent)
+                base = os.path.basename(val.rstrip("/")) or "out"
+                shared = os.path.join(tmp_parent, base)
+                new_args.extend([a, shared])
+                moves.append((val, shared))
+                i += 2
+                continue
+        new_args.append(a)
+        i += 1
+    return new_args, moves
+
+
+def _stage_input_paths(args):
+    """Copy agent-side input files into the shared volume and rewrite
+    the flag to point at the staged copy. Returns (new_args, stagings)
+    where stagings is a list of (shared_path, original_path) tuples for
+    stdout/stderr rewriting + cleanup."""
+    new_args, stagings = [], []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in INPUT_FLAGS and i + 1 < len(args):
+            val = args[i + 1]
+            if val and not val.startswith("/task/") and val != "/task":
+                src = val if val.startswith("/") else os.path.abspath(val)
+                if os.path.isfile(src):
+                    _mkshared(SHARE_ROOT)
+                    tmp_parent = os.path.join(SHARE_ROOT, uuid.uuid4().hex)
+                    _mkshared(tmp_parent)
+                    base = os.path.basename(src) or "input"
+                    shared = os.path.join(tmp_parent, base)
+                    try:
+                        shutil.copyfile(src, shared)
+                        try: os.chmod(shared, 0o664)
+                        except OSError: pass
+                    except OSError as e:
+                        print(f"oracle: could not stage {a} {val}: {e}", file=sys.stderr)
+                    else:
+                        new_args.extend([a, shared])
+                        stagings.append((shared, val))
+                        i += 2
+                        continue
+        new_args.append(a)
+        i += 1
+    return new_args, stagings
+
+
+def _cleanup_stagings(stagings):
+    for shared, _ in stagings:
+        try: shutil.rmtree(os.path.dirname(shared))
+        except OSError: pass
+
+
+def _restore(moves):
+    for orig, shared in moves:
+        if not os.path.exists(shared):
+            continue
+        try:
+            if os.path.isdir(shared):
+                os.makedirs(orig, exist_ok=True)
+                for name in os.listdir(shared):
+                    src = os.path.join(shared, name)
+                    dst = os.path.join(orig, name)
+                    if os.path.exists(dst):
+                        if os.path.isdir(dst): shutil.rmtree(dst)
+                        else: os.remove(dst)
+                    shutil.move(src, dst)
+            else:
+                os.makedirs(os.path.dirname(orig) or ".", exist_ok=True)
+                if os.path.exists(orig):
+                    if os.path.isdir(orig): shutil.rmtree(orig)
+                    else: os.remove(orig)
+                shutil.move(shared, orig)
+        finally:
+            try: shutil.rmtree(os.path.dirname(shared))
+            except OSError: pass
+
+
+# ─── HTTP helpers shared by one-shot + session subcommands ───────────
+
+def _headers(extra=None):
+    h = {"Content-Type": "application/json"}
+    if SERVICES_TOKEN:
+        h["Authorization"] = f"Bearer {SERVICES_TOKEN}"
+    if extra:
+        h.update(extra)
+    return h
+
+
+def _http(method: str, path: str, body: bytes | None = None, binary_response: bool = False):
+    req = urllib.request.Request(
+        f"{SERVICES_URL}{path}", data=body, headers=_headers(), method=method,
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=620)
+        data = resp.read()
+    except urllib.error.HTTPError as e:
+        try: msg = json.loads(e.read()).get("error", str(e))
+        except Exception: msg = str(e)
+        print(f"oracle: service error {e.code}: {msg}", file=sys.stderr)
+        return None
+    except (urllib.error.URLError, socket.error, TimeoutError) as e:
+        print(f"oracle: service unreachable: {e}", file=sys.stderr)
+        return None
+    if binary_response:
+        return data
+    try:
+        return json.loads(data)
+    except Exception as e:
+        print(f"oracle: bad response json: {e}", file=sys.stderr)
+        return None
+
+
+# ─── Session subcommand dispatch ─────────────────────────────────────
+
+_SESSION_USAGE = """\
+Usage:
+  oracle session start <rom>
+  oracle session set-keys <id> <keys_hex>
+  oracle session run-frame <id> [count]        (default count=1)
+  oracle session framebuffer <id>              → raw RGBA bytes (153600)
+  oracle session audio <id>                    → raw i16 LRLR… (drains)
+  oracle session info <id>                     → JSON state
+  oracle session end <id>
+"""
+
+
+def _session_dispatch(args: list[str]) -> int:
+    if not args or args[0] in ("-h", "--help", "help"):
+        sys.stdout.write(_SESSION_USAGE)
+        return 0 if args else 2
+    sub = args[0]
+    rest = args[1:]
+
+    if sub == "start":
+        if not rest:
+            print("oracle session start: need <rom>", file=sys.stderr)
+            return 2
+        resp = _http("POST", "/oracle/session",
+                     json.dumps({"rom": rest[0], "cwd": os.getcwd()}).encode())
+        if resp is None:
+            return 2
+        print(json.dumps(resp))
+        return 0
+
+    if sub == "set-keys":
+        if len(rest) != 2:
+            print("oracle session set-keys: need <id> <keys_hex>", file=sys.stderr)
+            return 2
+        resp = _http("POST", f"/oracle/session/{rest[0]}/set-keys",
+                     json.dumps({"keys": rest[1]}).encode())
+        if resp is None:
+            return 2
+        print(json.dumps(resp))
+        return 0
+
+    if sub == "run-frame":
+        if not rest:
+            print("oracle session run-frame: need <id> [count]", file=sys.stderr)
+            return 2
+        count = 1
+        if len(rest) > 1:
+            try: count = int(rest[1], 0)
+            except ValueError:
+                print(f"oracle session run-frame: bad count {rest[1]!r}", file=sys.stderr)
+                return 2
+        resp = _http("POST", f"/oracle/session/{rest[0]}/run-frame",
+                     json.dumps({"count": count}).encode())
+        if resp is None:
+            return 2
+        print(json.dumps(resp))
+        return 0
+
+    if sub in ("framebuffer", "audio"):
+        if not rest:
+            print(f"oracle session {sub}: need <id>", file=sys.stderr)
+            return 2
+        data = _http("GET", f"/oracle/session/{rest[0]}/{sub}", binary_response=True)
+        if data is None:
+            return 2
+        try:
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+        except BrokenPipeError:
+            # Downstream tool (`head`, `xxd | head`, etc.) closed the pipe
+            # early. Not an error — just means they got what they needed.
+            pass
+        return 0
+
+    if sub == "info":
+        if not rest:
+            print("oracle session info: need <id>", file=sys.stderr)
+            return 2
+        resp = _http("GET", f"/oracle/session/{rest[0]}/info")
+        if resp is None:
+            return 2
+        print(json.dumps(resp))
+        return 0
+
+    if sub == "end":
+        if not rest:
+            print("oracle session end: need <id>", file=sys.stderr)
+            return 2
+        resp = _http("DELETE", f"/oracle/session/{rest[0]}")
+        if resp is None:
+            return 2
+        print(json.dumps(resp))
+        return 0
+
+    print(f"oracle session: unknown subcommand {sub!r}", file=sys.stderr)
+    sys.stderr.write(_SESSION_USAGE)
+    return 2
+
+
+# ─── main ────────────────────────────────────────────────────────────
+
+def main() -> int:
+    args = sys.argv[1:]
+
+    # New stateful session API — doesn't go through one-shot /oracle.
+    if args and args[0] == "session":
+        return _session_dispatch(args[1:])
+
+    # One-shot CLI (help, info, run). Stage inputs before outputs so a
+    # staging failure bails before creating output-path scratch dirs.
+    args, stagings = _stage_input_paths(args)
+    new_args, moves = _rewrite_dump_paths(args)
+    req = {"cwd": os.getcwd(), "args": new_args}
+    data = _http("POST", "/oracle", json.dumps(req).encode())
+    if data is None:
+        _cleanup_stagings(stagings)
+        return 2
+    try: _restore(moves)
+    except Exception as e:
+        print(f"oracle: failed to move dump outputs back: {e}", file=sys.stderr)
+    _cleanup_stagings(stagings)
+
+    out = data.get("stdout", "") or ""
+    err = data.get("stderr", "") or ""
+    for orig, shared in moves:
+        out = out.replace(shared, orig)
+        err = err.replace(shared, orig)
+    # For input stagings stdout/stderr may reference the shared path if
+    # the server echoes it (e.g. oracle's own "loaded replay from <path>"
+    # message). Rewrite to the agent's path for accurate tracebacks.
+    for shared, orig in stagings:
+        out = out.replace(shared, orig)
+        err = err.replace(shared, orig)
+    sys.stdout.write(out)
+    sys.stderr.write(err)
+    return int(data.get("returncode", 1))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

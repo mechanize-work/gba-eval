@@ -1,0 +1,25 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Test ROMs and OSS homebrew under corpus/roms/ are force-added.
+# Commercial ROM dumps stay gitignored.
+*.gba
+*.sav
+/bios
+
+# Build artifacts — regenerable from reference/build-mesen.sh
+/reference/build-*/
+/reference/*.a
+
+# macOS
+.DS_Store
+
+# Quickstart-local secrets + extracted artifacts + grader output
+quickstart/.env
+quickstart/.extracted.wasm
+/results/
+
+# Python bytecode from helper scripts
+__pycache__/

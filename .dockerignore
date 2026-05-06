@@ -1,0 +1,6 @@
+target/
+.git/
+# Reference cache lives in /repo at runtime via mount; don't bake it in.
+corpus/reference-cache/
+# Local grader output (gitignored anyway)
+results/

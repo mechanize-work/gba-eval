@@ -1,0 +1,44 @@
+# Celeste Classic GBA demo replay
+# Press Start to begin, then move right + jump
+# Key bits: A=0x001 B=0x002 Select=0x004 Start=0x008
+#           Right=0x010 Left=0x020 Up=0x040 Down=0x080
+#           R=0x100 L=0x200
+
+# Wait for title screen
+60  008   # Start
+62  000   # release
+
+# Wait for game to load
+90  008   # Start again (some games need double)
+92  000
+
+# Move right
+120 010   # Right
+180 000   # stop
+
+# Jump right
+200 011   # Right + A
+220 010   # Right only
+260 000   # stop
+
+# Jump left
+280 021   # Left + A
+300 020   # Left only
+340 000   # stop
+
+# Run right and keep jumping
+360 011   # Right + A
+380 010   # Right
+400 011   # Right + A
+420 010   # Right
+440 011   # Right + A
+460 010   # Right
+480 000   # stop
+
+# Jump up
+500 041   # Up + A
+520 000
+540 011   # Right + A
+560 010
+580 011   # Right + A
+600 000

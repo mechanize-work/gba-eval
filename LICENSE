@@ -1,0 +1,53 @@
+This repository is multi-licensed. There is no single license that covers
+every file. To find the license that applies to a given file:
+
+  1. If the file is inside one of the directories listed below, that
+     directory's license applies.
+  2. Otherwise, MIT applies (see LICENSE-MIT).
+
+DIRECTORY                      LICENSE        FILE(S)
+-----------------------------  -------------  --------------------------
+third_party/mesen/             GPL-3.0        third_party/mesen/LICENSE
+reference/build-mesen.sh,      GPL-3.0        LICENSE-GPL3
+  reference/mesen_step.cpp,
+  reference/mesen.wasm
+corpus/roms/                   Per-ROM        corpus/README.md, LEGAL.md §2
+spec/                          MIT            LICENSE-MIT
+corpus/   (non-ROM files)      MIT            LICENSE-MIT
+candidates/                    MIT            LICENSE-MIT
+harness/                       MIT            LICENSE-MIT
+quickstart/                    MIT            LICENSE-MIT
+(repo root, configs, docs)     MIT            LICENSE-MIT
+
+COMPILED ARTIFACTS
+
+  reference/mesen.wasm     GPL-3.0 (compiled from Mesen2)
+  harness/grader (binary)  MIT (loads reference wasm at arm's length;
+                                see LEGAL.md §6.1)
+
+BIOS AND ROMS
+
+  gba_bios_stub.bin and spec/gba_bios_stub.bin are MIT-licensed original
+  work. They are a clean-room reimplementation of a handful of GBA SWI
+  entry points, not a copy of Nintendo's BIOS. See LEGAL.md §1.
+
+  No commercial ROMs are included in this repository. ROMs under
+  corpus/roms/ are homebrew or hardware test ROMs distributed under
+  their own upstream licenses. See LEGAL.md §2.
+
+For the plain-English explanation of how these licenses interact, what
+our distribution obligations are, and why the BIOS stub and ROM corpus
+are safe to ship, read LEGAL.md at the root of this repository.
+
+The full text of each license is in:
+  LICENSE-MIT                          (MIT license + scope notice)
+  LICENSE-GPL3                         (GNU GPL v3.0)
+  third_party/mesen/LICENSE            (Mesen2's GPL-3.0 copy)
+
+Aggregate third-party notice with per-component public Corresponding
+Source URLs:
+  NOTICE                               (repo root)
+
+The Mesen2 modifications (GPL-3.0 §5(a) record) are the commit history
+of our published Mesen2 fork:
+  https://github.com/yang-29/Mesen2-gba-headless
