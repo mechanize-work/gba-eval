@@ -4,6 +4,15 @@ We give frontier AI coding agents 24 hours to write a complete software GBA emul
 
 GBA Eval is analogous to the work [Mechanize](https://mechanize.work) does with top AI labs when we make environments for evaluating and training frontier LLMs, and we hope it gives a concrete sense of what we mean when we talk about environments and grading. If designing and building high-quality evaluations sounds like something you'd want to do, we're [hiring software engineers](https://mechanize.work/apply/software-engineer/?utm_source=gba-eval&utm_campaign=gba-eval).
 
+## See the attempts
+
+The nine emulators produced by the May 2026 leaderboard lineup —
+their full commit-by-commit autosave history and a rendered chat-log
+transcript for each — are published at
+[mechanize-work/gba-eval-attempts](https://github.com/mechanize-work/gba-eval-attempts).
+Each model has its own subrepo so you can clone just the one you're
+interested in.
+
 ## Quickstart
 
 Grade a wasm, or run your own agent inside the benchmark's container.
