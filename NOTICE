@@ -15,7 +15,7 @@ Copyright Mesen2 contributors. Upstream Mesen2 is at
 https://github.com/NovaSquirrel/Mesen2 (author: Sour).
 
   Corresponding Source (our fork, modified):
-      https://github.com/yang-29/Mesen2-gba-headless
+      https://github.com/mechanize-work/Mesen2-gba-headless
       Branch: main
       Contains full upstream history plus our modifications on top.
       Per-commit diffs are the GPL-3.0 §5(a) modification record.
