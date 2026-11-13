@@ -92,7 +92,7 @@ Source under GPL-3.0 §6, is:
 
 | Component | License | Corresponding Source | Upstream |
 | --- | --- | --- | --- |
-| Mesen2 (modified — GBA headless fork) | GPL-3.0-only | <https://github.com/yang-29/Mesen2-gba-headless> | <https://github.com/NovaSquirrel/Mesen2> |
+| Mesen2 (modified — GBA headless fork) | GPL-3.0-only | <https://github.com/mechanize-work/Mesen2-gba-headless> | <https://github.com/NovaSquirrel/Mesen2> |
 
 The fork is tracked as a git submodule at `third_party/mesen/`. It
 contains full upstream history plus our modifications as commits on
