@@ -5,7 +5,10 @@
 # own boot_frames() value. Conformant candidates leave this at 0.
 candidate_boot_frames: 0
 
-fuel_per_frame: 500000000
+# 5B/frame: 500M can trap heavy emulators on some frames, and a trapped
+# run_frame() scores that frame 0.0 with no error — silently understating the
+# result. 5B clears the heavy cases seen in this corpus. Do not lower.
+fuel_per_frame: 5000000000
 fuel_load_rom: 300000000000
 
 # ── Section weights ──────────────────────────────────────────────

@@ -53,7 +53,9 @@ impl Default for GraderConfig {
 
         Self {
             candidate_boot_frames: 0,
-            fuel_per_frame: 500_000_000,
+            // 5B/frame: 500M traps heavy emulators on some frames and silently
+            // scores them 0.0 (see corpus/grader.yaml). Keep the default safe.
+            fuel_per_frame: 5_000_000_000,
             fuel_load_rom: 60_000_000_000,
             section_weights: sw,
             subsystem_weights: HashMap::new(),
