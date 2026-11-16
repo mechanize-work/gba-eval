@@ -102,6 +102,11 @@ def _rate_check(token: str) -> bool:
 
 # ─── Path validation (shared with /oracle) ───────────────────────────
 
+# Flags whose next argument is a filesystem path. The ROM positional is
+# handled separately: the thin client does not rewrite it.
+_PATH_FLAGS = {"--replay", "--dump-frames", "--dump-audio", "--dump", "--output", "-o"}
+
+
 def _sanitize_cwd(raw: str) -> str:
     if not raw:
         return TASK_ROOT
@@ -111,23 +116,95 @@ def _sanitize_cwd(raw: str) -> str:
     return TASK_ROOT
 
 
-def _paths_inside_task(args: list[str]) -> str | None:
-    for a in args:
-        if not a.startswith("/"):
+def _inside_task(resolved: str) -> bool:
+    return resolved == TASK_ROOT or resolved.startswith(TASK_ROOT + "/")
+
+
+def _has_symlink(path: str) -> bool:
+    """True if any existing component under /task is a symlink.
+
+    A symlink the agent can swap on the shared volume would make a
+    realpath check that already passed point somewhere else by the time
+    the oracle opens the file. Missing tail components are fine: dump
+    outputs are created by the oracle and do not exist yet.
+    """
+    if not _inside_task(os.path.normpath(path)) and path != TASK_ROOT:
+        return False
+    rel = os.path.normpath(path)[len(TASK_ROOT):].strip("/")
+    if not rel or rel == ".":
+        return False
+    cur = TASK_ROOT
+    for part in rel.split("/"):
+        cur = os.path.join(cur, part)
+        if not os.path.lexists(cur):
+            return False
+        if os.path.islink(cur):
+            return True
+    return False
+
+
+def _outside_task(raw: str, cwd: str) -> bool:
+    """True when `raw` escapes /task, or names a symlink under it.
+
+    Relative paths are joined onto `cwd` first. `os.path.realpath` follows
+    `..` even when the final file does not exist yet, which is what dump
+    outputs look like.
+    """
+    joined = raw if raw.startswith("/") else os.path.join(cwd, raw)
+    normalized = os.path.normpath(joined)
+    if not _inside_task(normalized):
+        return True
+    if _has_symlink(normalized):
+        return True
+    resolved = os.path.realpath(normalized)
+    return not _inside_task(resolved)
+
+
+def _path_args(args: list[str]) -> list[str]:
+    """Paths the oracle will open or create. Frame counts are not paths."""
+    paths: list[str] = []
+    i = 0
+    command: str | None = None
+    positionals: list[str] = []
+    while i < len(args):
+        arg = args[i]
+        if arg in _PATH_FLAGS and i + 1 < len(args):
+            paths.append(args[i + 1])
+            i += 2
             continue
-        resolved = os.path.realpath(a)
-        if resolved != TASK_ROOT and not resolved.startswith(TASK_ROOT + "/"):
-            return a
+        if arg.startswith("-"):
+            i += 1
+            continue
+        if command is None:
+            command = arg
+            i += 1
+            continue
+        positionals.append(arg)
+        i += 1
+    if command == "run" and positionals:
+        # `oracle run <rom> [frames]`. The ROM is a path even when it is
+        # a bare filename like `game.gba`. The frame count is not.
+        paths.append(positionals[0])
+        for extra in positionals[1:]:
+            if "/" in extra or extra.startswith("."):
+                paths.append(extra)
+    return paths
+
+
+def _paths_inside_task(args: list[str], cwd: str) -> str | None:
+    for raw in _path_args(args):
+        if _outside_task(raw, cwd):
+            return raw
     return None
 
 
 def _resolve_rom(raw: str, cwd: str) -> str | None:
-    """ROM path must resolve under /task."""
-    p = raw if raw.startswith("/") else os.path.join(cwd, raw)
-    resolved = os.path.realpath(p)
-    if resolved != TASK_ROOT and not resolved.startswith(TASK_ROOT + "/"):
+    """ROM path must resolve to a regular file under /task."""
+    if _outside_task(raw, cwd):
         return None
-    if not os.path.isfile(resolved):
+    joined = raw if raw.startswith("/") else os.path.join(cwd, raw)
+    resolved = os.path.realpath(joined)
+    if not _inside_task(resolved) or not os.path.isfile(resolved):
         return None
     return resolved
 
@@ -227,7 +304,8 @@ def _session_run_frames(sid: str, count: int) -> tuple[int, str]:
             capture_output=True, text=True,
             timeout=MAX_WALL_SECONDS,
             env={"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                 "HOME": "/tmp", "LANG": "C.UTF-8"},
+                 "HOME": "/tmp", "LANG": "C.UTF-8",
+                 "ORACLE_TASK_ROOT": TASK_ROOT},
         )
     except subprocess.TimeoutExpired:
         return 504, "oracle timeout"
@@ -420,11 +498,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(a, str) or len(a) > MAX_ARG_LEN:
                 self._reply(400, {"error": "arg type/len"})
                 return
-        bad = _paths_inside_task(args)
+        cwd = _sanitize_cwd(req.get("cwd") or TASK_ROOT)
+        bad = _paths_inside_task(args, cwd)
         if bad is not None:
             self._reply(400, {"error": f"path outside /task: {bad}"})
             return
-        cwd = _sanitize_cwd(req.get("cwd") or TASK_ROOT)
 
         t0 = time.time()
         try:
@@ -433,7 +511,8 @@ class Handler(BaseHTTPRequestHandler):
                 capture_output=True, text=True,
                 timeout=MAX_WALL_SECONDS,
                 env={"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                     "HOME": "/tmp", "LANG": "C.UTF-8"},
+                     "HOME": "/tmp", "LANG": "C.UTF-8",
+                     "ORACLE_TASK_ROOT": TASK_ROOT},
             )
             out, err, rc = proc.stdout, proc.stderr, proc.returncode
         except subprocess.TimeoutExpired as e:

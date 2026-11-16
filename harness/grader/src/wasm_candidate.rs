@@ -28,6 +28,24 @@ use lockstep::{Reference, GBA_PIXELS};
 
 const MAX_ROM: usize = 32 * 1024 * 1024;
 
+/// Mesen's own warmup is 6 frames. A candidate may need a little more
+/// (BIOS, intro). Lockstep calls `run_frame` once per reported boot
+/// frame and refuels every call, so an uncapped return stalls grading.
+const MAX_CANDIDATE_BOOT_FRAMES: i32 = 256;
+
+fn accepted_boot_frames(raw: i32) -> Result<u32> {
+    if raw <= 0 {
+        return Ok(0);
+    }
+    if raw > MAX_CANDIDATE_BOOT_FRAMES {
+        bail!(
+            "emu_boot_frames() returned {raw}, above the cap of {MAX_CANDIDATE_BOOT_FRAMES}. \
+             The grader would run that many extra frames before scoring."
+        );
+    }
+    Ok(raw as u32)
+}
+
 // Fuel budgets come from grader.yaml via GraderConfig — see main.rs
 // for defaults. load_rom needs a huge budget because it scans the
 // full ROM for save strings + runs init.
@@ -248,7 +266,7 @@ impl WasmCandidate {
         let fb_ptr = f_framebuffer.call(&mut store, ())? as u32;
         let cached_audio_rate = f_audio_rate.call(&mut store, ()).unwrap_or(32768) as u32;
         let cached_boot_frames = match &f_boot_frames {
-            Some(f) => f.call(&mut store, ()).unwrap_or(0).max(0) as u32,
+            Some(f) => accepted_boot_frames(f.call(&mut store, ()).unwrap_or(0))?,
             None => 0,
         };
 
@@ -454,5 +472,28 @@ fn bytemuck_u32(s: &mut [u32; GBA_PIXELS]) -> &mut [u8] {
     // Slice length is exact: GBA_PIXELS u32s = GBA_PIXELS*4 u8s.
     unsafe {
         std::slice::from_raw_parts_mut(s.as_mut_ptr() as *mut u8, GBA_PIXELS * 4)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn boot_frames_negative_is_zero() {
+        assert_eq!(accepted_boot_frames(-1).unwrap(), 0);
+        assert_eq!(accepted_boot_frames(0).unwrap(), 0);
+    }
+
+    #[test]
+    fn boot_frames_accepts_mesen_sized_warmup() {
+        assert_eq!(accepted_boot_frames(6).unwrap(), 6);
+        assert_eq!(accepted_boot_frames(MAX_CANDIDATE_BOOT_FRAMES).unwrap(), 256);
+    }
+
+    #[test]
+    fn boot_frames_rejects_a_stall() {
+        let err = accepted_boot_frames(2_000_000_000).unwrap_err().to_string();
+        assert!(err.contains("above the cap"), "{err}");
     }
 }

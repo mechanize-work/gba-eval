@@ -14,8 +14,8 @@
 
 use std::env;
 use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::io::{self, Read, Write};
+use std::path::{Component, Path, PathBuf};
 use std::process::exit;
 
 use grader::wasm_candidate::WasmCandidate;
@@ -74,12 +74,139 @@ fn record_usage(frames: u64) {
     let _ = fs::write(USAGE_FILE, format!("{}\n", used + frames));
 }
 
+// GBA ROMs are at most 32 MiB. Cap the bytes we actually read so a path
+// like /dev/zero cannot grow until the process dies. Metadata length is
+// not enough: device files often report a length of 0.
+const MAX_INPUT_BYTES: u64 = 32 * 1024 * 1024;
+
+// Linux. The final open must not follow a symlink the agent swapped in
+// after the path check.
+#[cfg(unix)]
+const O_NOFOLLOW: i32 = 0x20000;
+
+fn task_root() -> Option<PathBuf> {
+    env::var_os("ORACLE_TASK_ROOT")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Collapse `.` and `..` without touching the filesystem.
+fn normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            Component::RootDir => out.push("/"),
+            Component::Normal(name) => out.push(name),
+            Component::Prefix(prefix) => out.push(prefix.as_os_str()),
+        }
+    }
+    out
+}
+
+/// When `root` is set, `path` must stay inside it and must not name a symlink.
+/// When `root` is None (a developer running the binary directly), the path is
+/// unchanged so `oracle run ... --dump-frames /tmp/ref` still works.
+fn confine_to(path: &Path, root: Option<&Path>) -> Result<PathBuf, String> {
+    let Some(root) = root else {
+        return Ok(path.to_path_buf());
+    };
+    // Keep the root lexical. Canonicalizing it would follow a symlink and
+    // then reject every `/task/...` path for not matching the link target.
+    if fs::symlink_metadata(root).is_err() {
+        return Err(format!("task root {} does not exist", root.display()));
+    }
+    let root = if root.is_absolute() {
+        normalize(root)
+    } else {
+        normalize(&env::current_dir().map_err(|e| e.to_string())?.join(root))
+    };
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        env::current_dir().map_err(|e| e.to_string())?.join(path)
+    };
+    let normalized = normalize(&absolute);
+    if normalized != root && !normalized.starts_with(&root) {
+        return Err(format!("path outside task: {}", path.display()));
+    }
+    let rel = normalized.strip_prefix(&root).map_err(|e| e.to_string())?;
+    let mut walked = root;
+    for comp in rel.components() {
+        let Component::Normal(name) = comp else {
+            return Err(format!("bad path: {}", path.display()));
+        };
+        walked.push(name);
+        match fs::symlink_metadata(&walked) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Err(format!("symlink refused: {}", path.display()));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => break,
+            Err(e) => return Err(format!("stat {}: {e}", walked.display())),
+        }
+    }
+    Ok(normalized)
+}
+
+fn confine(path: &Path) -> Result<PathBuf, String> {
+    confine_to(path, task_root().as_deref())
+}
+
+fn must_confine(path: &Path) -> PathBuf {
+    confine(path).unwrap_or_else(|e| {
+        eprintln!("error: {e}");
+        exit(1);
+    })
+}
+
+#[cfg(unix)]
+fn open_nofollow(path: &Path) -> io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NOFOLLOW)
+        .open(path)
+}
+
+#[cfg(unix)]
+fn create_nofollow(path: &Path) -> io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .custom_flags(O_NOFOLLOW)
+        .open(path)
+}
+
+fn read_capped(path: &Path) -> io::Result<Vec<u8>> {
+    let path = confine(path).map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e))?;
+    let mut file = open_nofollow(&path)?;
+    let mut limited = (&mut file).take(MAX_INPUT_BYTES + 1);
+    let mut buf = Vec::new();
+    limited.read_to_end(&mut buf)?;
+    if buf.len() as u64 > MAX_INPUT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("file exceeds {MAX_INPUT_BYTES} bytes"),
+        ));
+    }
+    Ok(buf)
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // PPM output
 // ─────────────────────────────────────────────────────────────────────────
 
 fn write_ppm(path: &Path, fb: &[u32; GBA_PIXELS]) {
-    let mut f = fs::File::create(path).unwrap();
+    let mut f = create_nofollow(path).unwrap_or_else(|e| {
+        eprintln!("error: create {}: {e}", path.display());
+        exit(1);
+    });
     write!(f, "P6\n{GBA_W} {GBA_H}\n255\n").unwrap();
     let mut rgb = vec![0u8; GBA_PIXELS * 3];
     for i in 0..GBA_PIXELS {
@@ -172,15 +299,19 @@ fn cmd_run(
 
     // Load replay
     let inputs = match replay_path {
-        Some(ref p) => InputReplay::from_file(p).unwrap_or_else(|e| {
-            eprintln!("error: read replay {}: {e}", p.display());
-            exit(1);
-        }),
+        Some(ref p) => {
+            let bytes = read_capped(p).unwrap_or_else(|e| {
+                eprintln!("error: read replay {}: {e}", p.display());
+                exit(1);
+            });
+            let text = String::from_utf8_lossy(&bytes);
+            InputReplay::from_json(&text).unwrap_or_else(|_| InputReplay::from_text(&text))
+        }
         None => InputReplay::new(),
     };
 
-    // Load ROM
-    let rom = fs::read(&rom_path).unwrap_or_else(|e| {
+    // Load ROM. Bounded read: a hostile path must not be able to stream forever.
+    let rom = read_capped(&rom_path).unwrap_or_else(|e| {
         eprintln!("error: read {}: {e}", rom_path.display());
         exit(1);
     });
@@ -188,10 +319,17 @@ fn cmd_run(
     // Init reference — mesen_candidate.wasm under wasmtime.
     let mut reference = load_mesen_reference(&rom);
 
-    // Create output dirs
-    if let Some(ref dir) = dump_frames {
-        fs::create_dir_all(dir).unwrap();
-    }
+    // Create output dirs. Confine first so a relative `../` dump path
+    // cannot create files outside the task root.
+    let dump_frames = dump_frames.map(|dir| {
+        let dir = must_confine(&dir);
+        fs::create_dir_all(&dir).unwrap_or_else(|e| {
+            eprintln!("error: create {}: {e}", dir.display());
+            exit(1);
+        });
+        dir
+    });
+    let dump_audio = dump_audio.map(|path| must_confine(&path));
 
     // Burn boot frames
     for _ in 0..reference.boot_frames() {
@@ -216,8 +354,13 @@ fn cmd_run(
         audio.extend_from_slice(&samples);
     }
 
-    // Write audio
+    // Write audio. `write_wav` uses `fs::write`, which follows a symlink,
+    // so refuse a symlink at the leaf before that call.
     if let Some(ref path) = dump_audio {
+        if path.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+            eprintln!("error: symlink refused: {}", path.display());
+            exit(1);
+        }
         write_wav(path, &audio, audio_rate).unwrap_or_else(|e| {
             eprintln!("error: write wav {}: {e}", path.display());
             exit(1);
@@ -286,5 +429,64 @@ fn main() {
             eprintln!("error: unknown command '{other}'. Use 'info' or 'run'.");
             exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(label: &str) -> PathBuf {
+        let dir = env::temp_dir().join(format!("oracle-confine-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn dotdot_outside_the_root_is_rejected() {
+        let root = scratch("escape");
+        let escaped = root.join("..").join("outside");
+        let err = confine_to(&escaped, Some(&root)).unwrap_err();
+        assert!(err.contains("outside"), "{err}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn file_inside_the_root_is_kept() {
+        let root = scratch("inside");
+        let rom = root.join("game.gba");
+        fs::write(&rom, b"rom").unwrap();
+        let got = confine_to(&rom, Some(&root)).unwrap();
+        assert_eq!(got, normalize(&rom));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn symlink_inside_the_root_is_rejected() {
+        let root = scratch("link");
+        let outside = scratch("secret");
+        let secret = outside.join("mesen.wasm");
+        fs::write(&secret, b"nope").unwrap();
+        std::os::unix::fs::symlink(&secret, root.join("link")).unwrap();
+        let err = confine_to(&root.join("link"), Some(&root)).unwrap_err();
+        assert!(err.contains("symlink"), "{err}");
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn missing_output_inside_the_root_is_allowed() {
+        let root = scratch("dump");
+        let dest = root.join("out").join("audio.wav");
+        let got = confine_to(&dest, Some(&root)).unwrap();
+        assert_eq!(got, normalize(&dest));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn without_a_root_the_path_is_unchanged() {
+        let path = Path::new("/tmp/ref");
+        assert_eq!(confine_to(path, None).unwrap(), path);
     }
 }
